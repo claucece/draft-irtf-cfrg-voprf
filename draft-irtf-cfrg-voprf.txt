@@ -5,10 +5,10 @@
 Network Working Group                                        A. Davidson
 Internet-Draft                                            Brave Software
 Intended status: Informational                          A. Faz-Hernandez
-Expires: 27 December 2021                                    N. Sullivan
+Expires: 3 January 2022                                      N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                            25 June 2021
+                                                             2 July 2021
 
 
    Oblivious Pseudorandom Functions (OPRFs) using Prime-Order Groups
@@ -50,7 +50,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 27 December 2021.
+   This Internet-Draft will expire on 3 January 2022.
 
 Copyright Notice
 
@@ -84,31 +84,40 @@ Table of Contents
        3.4.2.  VerifiableServerContext
        3.4.3.  Client Context
        3.4.4.  VerifiableClientContext
-   4.  Domain Separation
-   5.  Ciphersuites
-     5.1.  OPRF(ristretto255, SHA-512)
-     5.2.  OPRF(decaf448, SHAKE-256)
-     5.3.  OPRF(P-256, SHA-256)
-     5.4.  OPRF(P-384, SHA-512)
-     5.5.  OPRF(P-521, SHA-512)
-   6.  API Considerations
-   7.  Security Considerations
-     7.1.  Security Properties
-     7.2.  Cryptographic Security
-       7.2.1.  Computational Hardness Assumptions
-       7.2.2.  Protocol Security
-       7.2.3.  Q-Strong-DH Oracle
-       7.2.4.  Implications for Ciphersuite Choices
-     7.3.  Element and Scalar Validation
-     7.4.  Hashing to Group
-     7.5.  Blinding Considerations
-     7.6.  Timing Leaks
-     7.7.  Key Rotation
-       7.7.1.  Parameter Commitments
-   8.  Acknowledgements
-   9.  References
-     9.1.  Normative References
-     9.2.  Informative References
+   4.  OPRF Protocol With Metadata
+     4.1.  Overview
+     4.2.  Context Setup
+     4.3.  Data Types
+     4.4.  Context APIs
+       4.4.1.  Server Context Metadata Mode
+       4.4.2.  VerifiableServerContextMetadata
+       4.4.3.  Client Context Metadata Mode
+       4.4.4.  VerifiableClientContextMetadata
+   5.  Domain Separation
+   6.  Ciphersuites
+     6.1.  OPRF(ristretto255, SHA-512)
+     6.2.  OPRF(decaf448, SHAKE-256)
+     6.3.  OPRF(P-256, SHA-256)
+     6.4.  OPRF(P-384, SHA-512)
+     6.5.  OPRF(P-521, SHA-512)
+   7.  API Considerations
+   8.  Security Considerations
+     8.1.  Security Properties
+     8.2.  Cryptographic Security
+       8.2.1.  Computational Hardness Assumptions
+       8.2.2.  Protocol Security
+       8.2.3.  Q-Strong-DH Oracle
+       8.2.4.  Implications for Ciphersuite Choices
+     8.3.  Element and Scalar Validation
+     8.4.  Hashing to Group
+     8.5.  Blinding Considerations
+     8.6.  Timing Leaks
+     8.7.  Key Rotation
+       8.7.1.  Parameter Commitments
+   9.  Acknowledgements
+   10. References
+     10.1.  Normative References
+     10.2.  Informative References
    Appendix A.  Test Vectors
      A.1.  OPRF(ristretto255, SHA-512)
        A.1.1.  Base Mode
@@ -160,6 +169,11 @@ Table of Contents
    computation, using a known public key that serves as a commitment to
    the server's secret key.  The document describes the protocol, the
    public-facing API, and its security properties.
+
+   In some applications, there is the need to include an amount of
+   public metadata into the OPRF protocol.  Partially-Oblivious PRFs
+   (POPRF) [TCRSTW21] are used to extend the OPRF functionality to
+   include this public input (or metadata tag) t in the PRF evaluation.
 
 1.1.  Change log
 
@@ -281,12 +295,12 @@ Table of Contents
 
    *  "GG": A prime-order group implementing the API described below in
       Section 2.1, with base point defined in the corresponding
-      reference for each group.  (See Section 5 for these base points.)
+      reference for each group.  (See Section 6 for these base points.)
 
    *  "Hash": A cryptographic hash function that is indifferentiable
       from a Random Oracle, whose output length is Nh bytes long.
 
-   Section 5 specifies ciphersuites as combinations of "GG" and "Hash".
+   Section 6 specifies ciphersuites as combinations of "GG" and "Hash".
 
 2.1.  Prime-Order Group Dependency
 
@@ -341,7 +355,7 @@ Table of Contents
       byte array "buf" to a group element "A", or fails if the input is
       not a valid byte representation of an element.  This function can
       raise a DeserializeError if deserialization fails or "A" is the
-      identity element of the group; see Section 7.3.
+      identity element of the group; see Section 8.3.
 
    *  SerializeScalar(s): A member function of "GG" that maps a scalar
       element "s" to a unique byte array "buf" of fixed length "Ns".
@@ -349,7 +363,7 @@ Table of Contents
    *  DeserializeScalar(buf): A member function of "GG" that maps a byte
       array "buf" to a scalar "s", or fails if the input is not a valid
       byte representation of a scalar.  This function can raise a
-      DeserializeError if deserialization fails; see Section 7.3.
+      DeserializeError if deserialization fails; see Section 8.3.
 
    Two functions can be used for generating a (V)OPRF key pair ("skS",
    "pkS") where "skS" is a non-zero integer less than "p" and "pkS =
@@ -370,7 +384,7 @@ Table of Contents
    a prime-order group, and this MUST be upheld by any implementer.
    That is, any curve instantiation should be written such that any
    discrepancies with a prime-order group instantiation are removed.
-   See Section 5 for advice corresponding to the implementation of this
+   See Section 6 for advice corresponding to the implementation of this
    interface for specific definitions of elliptic curves.
 
 2.2.  Other Conventions
@@ -408,6 +422,12 @@ Table of Contents
    "tag" individual servers with select keys.  This proof must not
    reveal the server's long-term private key to the client.
 
+   In both modes, a public input (or metadata tag) t can be added to the
+   PRF evaluation by using a PO-PRF: a client and server interact to
+   compute y = F(skS, x, t), where x is the client's input, skS is the
+   server's private key, t is a public metadata input and y is the OPRF
+   output.  The client learns y and the server learns nothing.
+
    The following one-byte values distinguish between these two modes:
 
                         +================+=======+
@@ -424,28 +444,31 @@ Table of Contents
 
    Both participants agree on the mode and a choice of ciphersuite that
    is used before the protocol exchange.  Once established, the base
-   mode of the protocol runs to compute "output = F(skS, input)" as
-   follows:
+   mode of the protocol runs to compute "output = F(skS, input, tag)" as
+   follows (note that both the client or server can optionally add the
+   public metadata input cTag or sTag):
 
-        Client(input)                             Server(skS)
-     ----------------------------------------------------------
-       blind, blindedElement = Blind(input)
+    Client(input, cTag)                             Server(skS, sTag)
+  -------------------------------------------------------------------
+    blind, blindedElement, cTag = Blind(input, cTag)
 
-                          blindedElement
-                           ---------->
+                        blindedElement, cTag
+                        ---------->
 
-       evaluatedElement, proof = Evaluate(skS, blindedElement)
+    evaluatedElement, proof, stag = Evaluate(skS, blindedElement, sTag, cTag)
 
-                         evaluatedElement
-                           <----------
+                      evaluatedElement, sTag
+                        <----------
 
-       output = Finalize(input, blind, evaluatedElement, blindedElement)
+    output = Finalize(input, blind, evaluatedElement, blindedElement, cTag, sTag)
 
-   In "Blind" the client generates a token and blinding data.  The
-   server computes the (V)OPRF evaluation in "Evaluation" over the
-   client's blinded token.  In "Finalize" the client unblinds the server
-   response and produces a byte array corresponding to the output of the
-   OPRF protocol.
+   In "Blind" the client generates a token and blinding data optionally
+   associated with the appropriate tag.  The server computes the (V)OPRF
+   evaluation in "Evaluation" over the client's blinded token, the
+   optionally associated client tag and the optionally associated server
+   tag.  In "Finalize" the client unblinds the server response and
+   produces a byte array corresponding to the output of the OPRF
+   protocol.
 
    In the verifiable mode of the protocol, the server additionally
    computes a proof in Evaluate.  The client verifies this proof using
@@ -482,7 +505,7 @@ def SetupVerifiableClient(suite, pkS):
   return VerifiableClientContext(contextString, pkS)
 
    Each setup function takes a ciphersuite from the list defined in
-   Section 5.  Each ciphersuite has a two-byte field ID used to identify
+   Section 6.  Each ciphersuite has a two-byte field ID used to identify
    the suite.
 
    [[RFC editor: please change "VOPRF06" to "RFCXXXX", where XXXX is the
@@ -507,6 +530,9 @@ def SetupVerifiableClient(suite, pkS):
 
    SerializedScalar Proof[2];
 
+   "Tag" is an opaque byte string of arbitrary length representing the
+   public metadata input optionally used by either Client and/or Server.
+
 3.4.  Context APIs
 
    In this section, we detail the APIs available on the client and
@@ -525,7 +551,9 @@ def SetupVerifiableClient(suite, pkS):
    setup and the (V)OPRF key pair.  It has three functions, "Evaluate",
    "FullEvaluate" and "VerifyFinalize" described below.  "Evaluate"
    takes serialized representations of blinded group elements from the
-   client as inputs.
+   client as inputs and optionally the public metadata input as
+   determined by the server and/or the public metadata input as sent by
+   the client .
 
    "FullEvaluate" takes ClientInput values, and it is useful for
    applications that need to compute the whole OPRF protocol on the
@@ -541,23 +569,34 @@ def SetupVerifiableClient(suite, pkS):
 
 3.4.1.1.  Evaluate
 
-   Input:
+Input:
 
-     PrivateKey skS
-     SerializedElement blindedElement
+  PrivateKey skS
+  SerializedElement blindedElement
+  Tag serverMetadataTag
+  Tag clientMetadataTag
 
-   Output:
+Output:
 
-     SerializedElement evaluatedElement
+  SerializedElement evaluatedElement
+  Tag serverMetadataTag
 
-   Errors: DeserializeError
+Errors: DeserializeError
 
-   def Evaluate(skS, blindedElement):
-     R = GG.DeserializeElement(blindedElement)
-     Z = skS * R
-     evaluatedElement = GG.SerializeElement(Z)
+def Evaluate(skS, blindedElement, serverMetadataTag, clientMetadataTag):
+  if serverMetadataTag != "" || clientMetadataTag != ""
+    R = GG.DeserializeElement(blindedElement)
+    metadata = "Metadata-" || contextString || I2OSP(len(serverMetadataTag), 2) || serverMetadataTag || I2OSP(len(clientMetadataTag), 2) || clientMetadataTag
+    tag = GG.HashToScalar(metadata)
+    t = skS + tag
+    Z = (tag^(-1)) * R
+    return evaluatedElement, serverMetadataTag
 
-     return evaluatedElement
+  R = GG.DeserializeElement(blindedElement)
+  Z = skS * R
+  evaluatedElement = GG.SerializeElement(Z)
+
+  return evaluatedElement, ""
 
 3.4.1.2.  FullEvaluate
 
@@ -584,30 +623,34 @@ def SetupVerifiableClient(suite, pkS):
 
 3.4.1.3.  VerifyFinalize
 
-   Input:
+Input:
 
-     PrivateKey skS
-     ClientInput input
-     opaque output[Nh]
+  PrivateKey skS
+  ClientInput input
+  opaque output[Nh]
+  Tag serverMetadataTag
+  Tag clientMetadataTag
 
-   Output:
+Output:
 
-     boolean valid
+  boolean valid
 
-   def VerifyFinalize(skS, input, output):
-     T = GG.HashToGroup(input)
-     element = GG.SerializeElement(T)
-     issuedElement = Evaluate(skS, [element])
-     E = GG.SerializeElement(issuedElement)
+def VerifyFinalize(skS, input, output):
+  T = GG.HashToGroup(input)
+  element = GG.SerializeElement(T)
+  issuedElement = Evaluate(skS, [element], serverMetadataTag, clientMetadataTag)
+  E = GG.SerializeElement(issuedElement)
 
-     finalizeDST = "Finalize-" || contextString
-     hashInput = I2OSP(len(input), 2) || input ||
-                 I2OSP(len(E), 2) || E ||
-                 I2OSP(len(finalizeDST), 2) || finalizeDST
+  finalizeDST = "Finalize-" || contextString
+  hashInput = I2OSP(len(input), 2) || input ||
+              I2OSP(len(serverMetadataTag), 2) || serverMetadataTag ||
+              I2OSP(len(clientMetadataTag), 2) || clientMetadataTag ||
+              I2OSP(len(E), 2) || E ||
+              I2OSP(len(finalizeDST), 2) || finalizeDST
 
-     digest = Hash(hashInput)
+  digest = Hash(hashInput)
 
-     return CT_EQUAL(digest, output)
+  return CT_EQUAL(digest, output)
 
 3.4.2.  VerifiableServerContext
 
@@ -618,27 +661,38 @@ def SetupVerifiableClient(suite, pkS):
 
 3.4.2.1.  Evaluate
 
-   Input:
+Input:
 
-     PrivateKey skS
-     PublicKey pkS
-     SerializedElement blindedElement
+  PrivateKey skS
+  PublicKey pkS
+  Tag serverMetadataTag
+  Tag clientMetadataTag SerializedElement blindedElement
 
-   Output:
+Output:
 
-     SerializedElement evaluatedElement
-     Proof proof
+  SerializedElement evaluatedElement
+  Proof proof
+  Tag serverMetadataTag
 
-   Errors: DeserializeError
+Errors: DeserializeError
 
-   def Evaluate(skS, pkS, blindedElement):
-     R = GG.DeserializeElement(blindedElement)
-     Z = skS * R
-     evaluatedElement = GG.SerializeElement(Z)
+def Evaluate(skS, pkS, blindedElement, serverMetadataTag, clientMetadataTag):
+  if serverMetadataTag != "" || clientMetadataTag != ""
+    R = GG.DeserializeElement(blindedElement)
+    metadata = "Metadata-" || contextString || I2OSP(len(serverMetadataTag), 2) || serverMetadataTag || I2OSP(len(clientMetadataTag), 2) || clientMetadataTag
+    tag = GG.HashToScalar(metadata)
+    t = skS + tag
+    Z = (tag^(-1)) * R
+    proof = GenerateProof(skS, t, pkS, R, Z)
+    return evaluatedElement, proof, serverMetadataTag
 
-     proof = GenerateProof(skS, G, pkS, R, Z)
+  R = GG.DeserializeElement(blindedElement)
+  Z = skS * R
+  evaluatedElement = GG.SerializeElement(Z)
 
-     return evaluatedElement, proof
+  proof = GenerateProof(skS, pkS, R, Z, "")
+
+  return evaluatedElement, proof, ""
 
    The helper functions "GenerateProof" and "ComputeComposites" are
    defined below.
@@ -648,7 +702,7 @@ def SetupVerifiableClient(suite, pkS):
    Input:
 
      Scalar k
-     Element A
+     Scalar t
      Element B
      Element C
      Element D
@@ -657,15 +711,24 @@ def SetupVerifiableClient(suite, pkS):
 
      Proof proof
 
-   def GenerateProof(k, A, B, C, D)
+   def GenerateProof(k, t, B, C, D)
      Cs = [C]
      Ds = [D]
-     a = ComputeCompositesFast(k, B, Cs, Ds)
+     if t != nil
+       a = ComputeCompositesFast(t, B, Cs, Ds)
+     else
+       a = ComputeCompositesFast(k, B, Cs, Ds)
 
      r = GG.RandomScalar()
      M = a[0]
      Z = a[1]
-     t2 = r * A
+     uu = ""
+
+     if t != nil
+       U = ScalarBaseMult(t)
+       uu = GG.SerializeElement(U)
+
+     t2 = ScalarBaseMult(r)
      t3 = r * M
 
      Bm = GG.SerializeElement(B)
@@ -675,7 +738,8 @@ def SetupVerifiableClient(suite, pkS):
      a3 = GG.SerializeElement(t3)
 
      challengeDST = "Challenge-" || contextString
-     h2Input = I2OSP(len(Bm), 2) || Bm ||
+     h2Input = I2OSP(len(uu), 2) || uu ||
+               I2OSP(len(Bm), 2) || Bm ||
                I2OSP(len(a0), 2) || a0 ||
                I2OSP(len(a1), 2) || a1 ||
                I2OSP(len(a2), 2) || a2 ||
@@ -683,7 +747,12 @@ def SetupVerifiableClient(suite, pkS):
                I2OSP(len(challengeDST), 2) || challengeDST
 
      c = GG.HashToScalar(h2Input)
-     s = (r - c * k) mod p
+
+     if t != nil
+       s = (r - c * t) mod p
+     else
+       s = (r - c * k) mod p
+
      proof = [GG.SerializeScalar(c), GG.SerializeScalar(s)]
 
      return proof
@@ -799,26 +868,33 @@ def SetupVerifiableClient(suite, pkS):
 
    In this mode, blinding is done multiplicatively.  Under certain
    application circumstances, the more optimal additive blinding
-   mechanism described in Section 3.4.4.2 can be used.  See Section 7.5
+   mechanism described in Section 3.4.4.2 can be used.  See Section 8.5
    for more details.
 
-   "Blind" is implemented as follows.
+   "Blind" is implemented as follows (nota that the metadataTag, taken
+   as an input, is an optional value.  If no metadataTag is provided by
+   the client, an empty string is sent as output).
 
    Input:
 
      ClientInput input
+     Tag metadataTag
 
    Output:
 
      Scalar blind
      SerializedElement blindedElement
+     Tag metadataTag
 
-   def Blind(input):
+   def Blind(input, metadataTag):
      blind = GG.RandomScalar()
      P = GG.HashToGroup(input)
      blindedElement = GG.SerializeElement(blind * P)
 
-     return blind, blindedElement
+     if !metadataTag
+       metadataTag = ""
+
+     return blind, blindedElement, metadataTag
 
    The inverse "Unblind" is implemented as follows.
 
@@ -847,24 +923,28 @@ def SetupVerifiableClient(suite, pkS):
    These additional inputs are only useful for the verifiable mode,
    described in Section 3.4.4.3.
 
-   Input:
+  Input:
 
-     ClientInput input
-     Scalar blind
-     SerializedElement evaluatedElement
+    ClientInput input
+    Scalar blind
+    SerializedElement evaluatedElement
+    Tag serverMetadataTag
+    Tag clientMetadataTag
 
-   Output:
+  Output:
 
-     opaque output[Nh]
+    opaque output[Nh]
 
-   def Finalize(input, blind, evaluatedElement):
-     unblindedElement = Unblind(blind, evaluatedElement)
+  def Finalize(input, blind, evaluatedElement):
+    unblindedElement = Unblind(blind, evaluatedElement)
 
-     finalizeDST = "Finalize-" || contextString
-     hashInput = I2OSP(len(input), 2) || input ||
-                 I2OSP(len(unblindedElement), 2) || unblindedElement ||
-                 I2OSP(len(finalizeDST), 2) || finalizeDST
-     return Hash(hashInput)
+    finalizeDST = "Finalize-" || contextString
+    hashInput = I2OSP(len(input), 2) || input ||
+                I2OSP(len(serverMetadataTag), 2) || serverMetadataTag ||
+                I2OSP(len(clientMetadataTag), 2) || clientMetadataTag ||
+                I2OSP(len(unblindedElement), 2) || unblindedElement ||
+                I2OSP(len(finalizeDST), 2) || finalizeDST
+    return Hash(hashInput)
 
 3.4.4.  VerifiableClientContext
 
@@ -881,7 +961,6 @@ def SetupVerifiableClient(suite, pkS):
 
    Input:
 
-     Element A
      Element B
      Element C
      Element D
@@ -891,7 +970,7 @@ def SetupVerifiableClient(suite, pkS):
 
      boolean verified
 
-   def VerifyProof(A, B, C, D, proof):
+   def VerifyProof(B, C, D, proof):
      Cs = [C]
      Ds = [D]
 
@@ -901,7 +980,7 @@ def SetupVerifiableClient(suite, pkS):
 
      M = a[0]
      Z = a[1]
-     t2 = ((s * A) + (c * B))
+     t2 = ((ScalarBaseMult(s)) + (c * B))
      t3 = ((s * M) + (c * Z))
 
      Bm = GG.SerializeElement(B)
@@ -969,7 +1048,7 @@ Errors: DeserializeError, VerifyError
 def VerifiableUnblind(blindedPublicKey, evaluatedElement, blindedElement, pkS, proof):
   Z = GG.DeserializeElement(evaluatedElement)
   R = GG.DeserializeElement(blindedElement)
-  if VerifyProof(G, pkS, R, Z, proof) == false:
+  if VerifyProof(pkS, R, Z, proof) == false:
     raise VerifyError
 
   N := Z - blindedPublicKey
@@ -994,7 +1073,7 @@ def VerifiableUnblind(blindedPublicKey, evaluatedElement, blindedElement, pkS, p
      Element blindedPublicKey
      Scalar blind
 
-   def Preprocess(pkS):
+   def VerifiablePreprocess(pkS):
      blind = GG.RandomScalar()
      blindedGenerator = ScalarBaseMult(blind)
      blindedPublicKey = pkS * blind
@@ -1025,7 +1104,474 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
               I2OSP(len(finalizeDST), 2) || finalizeDST
   return Hash(hashInput)
 
-4.  Domain Separation
+4.  OPRF Protocol With Metadata
+
+   In some applications, there is the need to include an amount of
+   public metadata into the OPRF protocol.  Partially-Oblivious PRFs
+   (POPRF), first introduced in [ECS15] and defined in [TCRSTW21],
+   extend the OPRF functionality to include this public input (or
+   metadata tag) t in the PRF evaluation.
+
+   A partially-oblivious PRF (POPRF) is a two-party protocol between a
+   server and a client, where the server holds a PRF key k, a public
+   metadata input t; the client holds some input x and the same public
+   metadata input t (referred as tag).
+
+   The protocol allows both parties to cooperate in computing F(k, t, x)
+   such that: the client learns F(k, t, x) without learning anything
+   about k; and the server does not learn anything about x or F(k, t,
+   x).  A Verifiable POPRF (VPOPRF) is a POPRF wherein the server can
+   prove to the client that F(k, t, x) was computed using the key k.
+
+   In this section, we define two POPRF variants: a base mode and
+   verifiable mode.  In the base mode, a client and server interact to
+   compute y = F(skS, t, x), where x is the client's input and t is the
+   public metadata input, skS is the server's private key, and y is the
+   POPRF output.  The client learns y and the server learns nothing; but
+   they both know the public metadata input.  In the verifiable mode,
+   the client also gets proof that the server used skS in computing the
+   function.
+
+   To achieve verifiability, as in the original work of [TCRSTW21], we
+   provide a zero-knowledge proof that the key provided as input by the
+   server in the "Evaluate" function is the same key as it used to
+   produce their public key.
+
+   The following one-byte values distinguish between these two modes:
+
+                    +========================+=======+
+                    | Mode                   | Value |
+                    +========================+=======+
+                    | modeMetadataBase       | 0x02  |
+                    +------------------------+-------+
+                    | modeMetadataVerifiable | 0x03  |
+                    +------------------------+-------+
+
+                                 Table 2
+
+4.1.  Overview
+
+   Both participants agree on the mode and a choice of ciphersuite that
+   is used before the protocol exchange.  Once established, the base
+   mode of the protocol runs to compute "output = F(skS, tag, input)" as
+   follows:
+
+     Client(input, tag)                             Server(skS, tag)
+    ------------------------------------------------------------------------------
+    blind, blindedElement = BlindMetadata(input, tag)
+
+                       blindedElement, tag
+                        ---------->
+
+    evaluatedElement, proof = EvaluateMetadata(skS, blindedElement, tag)
+
+                      evaluatedElement
+                        <----------
+
+    output = FinalizeMetadata(input, blind, tag, evaluatedElement, blindedElement)
+
+   In "BlindMetadata" the client generates a token and blinding data
+   associated with the appropriate tag.  The server computes the
+   (V)POPRF evaluation in "EvaluateMetadata" over the client's blinded
+   token and tag.  In "FinalizeMetadata" the client unblinds the server
+   response and produces a byte array corresponding to the output of the
+   (V)POPRF protocol.
+
+   In the verifiable mode of the protocol, the server additionally
+   computes a proof in "EvaluateMetadata".  The client verifies this
+   proof using the server's expected public key before completing the
+   protocol and producing the protocol output.
+
+   TODO: note that the client or the server could be the ones providing
+   the metadata tag
+
+4.2.  Context Setup
+
+   Both modes of the OPRF with metadata involve an offline setup phase.
+   In this phase, both the client and server create a context used for
+   executing the online phase of the protocol.  The key pair ("skS",
+   "pkS") should be generated by calling either "GenerateKeyPair" or
+   "DeriveKeyPair".
+
+   The base metadata mode setup functions for creating client and server
+   contexts are below:
+
+def SetupBaseServer(suite, skS):
+  contextString = "VOPRF06-" || I2OSP(modeMetadataBase, 1) || I2OSP(suite.ID, 2)
+  return ServerContext(contextString, skS)
+
+def SetupBaseClient(suite):
+  contextString = "VOPRF06-" || I2OSP(modeMetadataBase, 1) || I2OSP(suite.ID, 2)
+  return ClientContext(contextString)
+
+   The verifiable metadata mode setup functions for creating client and
+   server contexts are below:
+
+def SetupVerifiableServer(suite, skS, pkS):
+  contextString = "VOPRF06-" || I2OSP(modeMetadataVerifiable, 1) || I2OSP(suite.ID, 2)
+  return VerifiableServerContext(contextString, skS)
+
+def SetupVerifiableClient(suite, pkS):
+  contextString = "VOPRF06-" || I2OSP(modeMetadataVerifiable, 1) || I2OSP(suite.ID, 2)
+  return VerifiableClientContext(contextString, pkS)
+
+   Each setup function takes a ciphersuite from the list defined in
+   Section 6.  Each ciphersuite has a two-byte field ID used to identify
+   the suite.
+
+   [[RFC editor: please change "VOPRF06" to "RFCXXXX", where XXXX is the
+   final number, here and elsewhere before publication.]]
+
+4.3.  Data Types
+
+   The OPRF Protocol With Metadata uses the same data types as the OPRF
+   protocol, with the addition of:
+
+   "Tag" is an opaque byte string of arbitrary length representing the
+   public metadata input used by both Client and Server.
+
+4.4.  Context APIs
+
+   In this section, we detail the APIs available on the client and
+   server (V)POPRF contexts.  Each API has the following implicit
+   parameters:
+
+   *  GG, a prime-order group implementing the API described in
+      Section 2.1.
+
+   *  contextString, a domain separation tag taken from the client or
+      server context.
+
+4.4.1.  Server Context Metadata Mode
+
+   The ServerContext encapsulates the context string constructed during
+   setup and the (V)POPRF key pair.  It has one function:
+   "EvaluateMetadata".
+
+4.4.1.1.  EvaluateMetadata
+
+Input:
+
+  PrivateKey skS
+  SerializedElement blindedElement
+  Tag metadataTag
+
+Output:
+
+  SerializedElement evaluatedElement
+
+Errors: DeserializeError
+
+def EvaluateMetadata(skS, blindedElement, metadataTag):
+  R = GG.DeserializeElement(blindedElement)
+  metadata = "Metadata-" || contextString || I2OSP(len(metadataTag), 2) || metadataTag
+  tag = GG.HashToScalar(metadata)
+  t = skS + tag
+  Z = (tag^(-1)) * R
+  evaluatedElement = GG.SerializeElement(Z)
+
+  return evaluatedElement
+
+4.4.2.  VerifiableServerContextMetadata
+
+   The VerifiableServerContextMetadata extends the base
+   ServerContextMetadata with an augmented "EvaluateMetadata()"
+   function.  This function produces a proof that "skS" was used in
+   computing the result.  It makes use of the helper functions
+   "GenerateProofMetadata" and "ComputeComposites", described below.
+   Note that in you can only batch elements related to one tag.
+
+4.4.2.1.  EvaluateMetadata
+
+Input:
+
+  PrivateKey skS
+  PublicKey pkS
+  SerializedElement blindedElement
+  Tag metadataTag
+
+Output:
+
+  SerializedElement evaluatedElement
+  Proof proof
+
+Errors: DeserializeError
+
+def EvaluateMetadata(skS, pkS, blindedElement):
+  R = GG.DeserializeElement(blindedElement)
+  metadata = "Metadata-" || contextString || I2OSP(len(metadataTag), 2) || metadataTag
+  tag = GG.HashToScalar(metadata)
+  t = skS + tag
+  Z = (tag^(-1)) * R
+
+  proof = GenerateProofMetadata(t, pkS, Z, R)
+
+  return evaluatedElement, proof
+
+   The helper functions "GenerateProofMetadata" is described below.  We
+   reuse the same "ComputeCompositesFast" function.
+
+4.4.2.2.  GenerateProofMetadata
+
+   Input:
+
+     Scalar t
+     Element A
+     Element B
+     Element C
+
+   Output:
+
+     Proof proof
+
+   def GenerateProofMetadata(t, A, B, C)
+     Bs = [B]
+     Cs = [C]
+     a = ComputeCompositesFast(t, A, Bs, Cs)
+
+     r = GG.RandomScalar()
+     M = a[0]
+     Z = a[1]
+
+     U = ScalarBaseMult(t)
+     sU = ScalarBaseMult(r)
+     sW = r * M
+
+     G = GG.SerializeElement(GG.Generator())
+     aa = GG.SerializeElement(A)
+     uu = GG.SerializeElement(U)
+     bb = GG.SerializeElement(M)
+     cc = GG.SerializeElement(Z)
+     su = GG.SerializeElement(sU)
+     sw = GG.SerializeElement(sW)
+
+     proofDST = "Challenge-" || contextString
+     hashInput = I2OSP(len(G), 2) || G ||
+                 I2OSP(len(aa), 2) || aa ||
+                 I2OSP(len(uu), 2) || uu ||
+                 I2OSP(len(bb), 2) || bb ||
+                 I2OSP(len(cc), 2) || cc ||
+                 I2OSP(len(su), 2) || su ||
+                 I2OSP(len(sw), 2) || sw ||
+                 I2OSP(len(proofDST), 2) || proofDST
+
+     c = GG.HashToScalar(hashInput)
+
+     y = c * t mod p
+     z = r - y mod p
+
+     proof = [GG.SerializeScalar(c), GG.SerializeScalar(z)]
+
+     return proof
+
+4.4.3.  Client Context Metadata Mode
+
+   The ClientContextMetadata encapsulates the context string constructed
+   during setup.  It has two functions, "BlindMetadata()" and
+   "FinalizeMetadata()", as described below.  It also has an internal
+   function, "UnblindMetadata()", which is used by "FinalizeMetadata".
+   The implementation of these functions varies depending on the
+   metadata mode.
+
+4.4.3.1.  BlindMetadata
+
+   In this mode, blinding is done multiplicatively.
+
+   "BlindMetadata" is implemented as follows.
+
+   Input:
+
+     ClientInput input
+     Tag metadataTag
+
+   Output:
+
+     Scalar blind
+     SerializedElement blindedElement
+     Tag metadataTag
+
+   def Blind(input, metadata_tag):
+     blind = GG.RandomScalar()
+     P = GG.HashToGroup(input)
+     blindedElement = GG.SerializeElement(blind * P)
+
+     return blind, blindedElement, metadataTag
+
+   The inverse "UnblindMetadata" is implemented as follows.
+
+   Input:
+
+     Scalar blind
+     SerializedElement evaluatedElement
+
+   Output:
+
+     SerializedElement unblindedElement
+
+   Errors: DeserializeError
+
+   def UnblindMetadata(blind, evaluatedElement, ...):
+     Z = GG.DeserializeElement(evaluatedElement)
+     N = (blind^(-1)) * Z
+     unblindedElement = GG.SerializeElement(N)
+
+     return unblindedElement
+
+4.4.3.2.  FinalizeMetadata
+
+   "FinalizeMetadata" depends on the internal "UnblindMetadata"
+   function.  In this mode, "FinalizeMetadata" does not include all
+   inputs listed in Section 3.1.  Those additional inputs are only
+   useful for the verifiable mode, described in Section 4.4.4.3.
+
+   Input:
+
+     ClientInput input
+     Scalar blind
+     Tag metadataTag
+     SerializedElement evaluatedElement
+
+   Output:
+
+     opaque output[Nh]
+
+   def FinalizeMetadata(input, blind, metadataTag, evaluatedElement):
+     unblindedElement = UnblindMetadata(blind, evaluatedElement)
+
+     finalizeDST = "Finalize-" || contextString
+     hashInput = I2OSP(len(input), 2) || input ||
+                 I2OSP(len(metadataTag), 2) || metadataTag ||
+                 I2OSP(len(unblindedElement), 2) || unblindedElement ||
+                 I2OSP(len(finalizeDST), 2) || finalizeDST
+     return Hash(hashInput)
+
+4.4.4.  VerifiableClientContextMetadata
+
+   The VerifiableClientContextMetadata extends the base
+   ClientContextMetadata with the desired server public key "pkS" with
+   an augmented "UnblindMetadat()" function.  This function verifies an
+   evaluation proof using "pkS".  It makes use of the helper function
+   "ComputeComposites" described above.  It has one helper function,
+   "VerifyProofMetadata()", defined below.
+
+4.4.4.1.  VerifyProofMetadata
+
+   This algorithm outputs a boolean "verifiedWithMetadata" which
+   indicates whether the proof inside of the evaluation associated with
+   the "tag" verifies correctly, or not.
+
+   Input:
+
+     Scalar t
+     Element A
+     Element B
+     Element C
+     Proof proof
+
+   Output:
+
+     boolean verifiedWithMetadata
+
+   def VerifyProofMetadata(t, A, B, C, proof):
+     metadata = "Metadata-" || contextString || I2OSP(len(t), 2) || t
+     tag = GG.HashToScalar(metadata)
+     uT = ScalarBaseMult(t)
+     U = uT + A
+
+     Bs = [B]
+     Cs = [C]
+     a = ComputeComposites(A, Bs, Cs)
+     z = GG.DeserializeScalar(proof[0])
+     c = GG.DeserializeScalar(proof[1])
+
+     M = a[0]
+     Z = a[1]
+
+     gZ = ScalarBaseMult(z)
+     sU = gZ + (U * c)
+     sW = (M * z) + (Z * c)
+
+     G = GG.SerializeElement(GG.Generator())
+     aa = GG.SerializeElement(A)
+     uu = GG.SerializeElement(U)
+     bb = GG.SerializeElement(M)
+     cc = GG.SerializeElement(Z)
+     su = GG.SerializeElement(sU)
+     sw = GG.SerializeElement(sW)
+
+     challengeDST = "Challenge-" || contextString
+     hashInput = I2OSP(len(G), 2) || G ||
+                 I2OSP(len(aa), 2) || aa ||
+                 I2OSP(len(uu), 2) || uu ||
+                 I2OSP(len(bb), 2) || bb ||
+                 I2OSP(len(cc), 2) || cc ||
+                 I2OSP(len(su), 2) || su ||
+                 I2OSP(len(sw), 2) || sw ||
+                 I2OSP(len(challengeDST), 2) || challengeDST
+
+     expectedC  = GG.HashToScalar(hInput)
+
+     return CT_EQUAL(expectedC, c)
+
+4.4.4.2.  Verifiable Unblind Metadata
+
+   In this mode, a "VerifiableUnblindMetadata" is used for the
+   "FinalizeMetadata" function.  This function can raise an exception if
+   element deserialization or proof verification fails.
+
+   Input:
+
+     Scalar blind
+     Element pkS
+     SerializedElement evaluatedElement
+     Scalar proof
+
+   Output:
+
+     SerializedElement unblindedElement
+
+   Errors: DeserializeError
+
+   def UnblindMetadata(blind, evaluatedElement, ...):
+     Z = GG.DeserializeElement(evaluatedElement)
+     R = (blind^(-1)) * Z
+     unblindedElement = GG.SerializeElement(R)
+
+     if VerifyProofMetadata(t, pkS, R, Z, proof) == false:
+       raise VerifyError
+
+     return unblindedElement
+
+4.4.4.3.  Verifiable Finalize Metadata
+
+   "FinalizeMetadata" works the same way as in the non-verifiable mode
+   but depends on the augmented internal verifiable "UnblindMetadata"
+   function.
+
+Input:
+
+  ClientInput input
+  Scalar blind
+  SerializedElement evaluatedElement
+  Element pkS
+  Scalar proof
+  Tag metadataTag
+
+Output:
+
+  opaque output[Nh]
+
+def FinalizeMetadata(input, blind, evaluatedElement):
+  unblindedElement = UnblindMetadata(blind, pkS, evaluatedElement, proof)
+
+  finalizeDST = "Finalize-" || contextString
+  hashInput = I2OSP(len(input), 2) || input ||
+              I2OSP(len(metadataTag), 2) || metadataTag ||
+              I2OSP(len(unblindedElement), 2) || unblindedElement ||
+              I2OSP(len(finalizeDST), 2) || finalizeDST
+  return Hash(hashInput)
+
+5.  Domain Separation
 
    Applications SHOULD construct input to the protocol to provide domain
    separation.  Any system which has multiple (V)OPRF applications
@@ -1033,7 +1579,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    separate.  Guidance for constructing info can be found in
    [I-D.irtf-cfrg-hash-to-curve]; Section 3.1.
 
-5.  Ciphersuites
+6.  Ciphersuites
 
    A ciphersuite (also referred to as 'suite' in this document) for the
    protocol wraps the functionality required for the protocol to take
@@ -1060,9 +1606,9 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    computed in the Setup functions.
 
    Applications should take caution in using ciphersuites targeting
-   P-256 and ristretto255.  See Section 7.2 for related discussion.
+   P-256 and ristretto255.  See Section 8.2 for related discussion.
 
-5.1.  OPRF(ristretto255, SHA-512)
+6.1.  OPRF(ristretto255, SHA-512)
 
    *  Group: ristretto255 [RISTRETTO]
 
@@ -1086,7 +1632,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    *  ID: 0x0001
 
-5.2.  OPRF(decaf448, SHAKE-256)
+6.2.  OPRF(decaf448, SHAKE-256)
 
    *  Group: decaf448 [RISTRETTO]
 
@@ -1110,7 +1656,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    *  ID: 0x0002
 
-5.3.  OPRF(P-256, SHA-256)
+6.3.  OPRF(P-256, SHA-256)
 
    *  Group: P-256 (secp256r1) [x9.62]
 
@@ -1132,7 +1678,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    *  ID: 0x0003
 
-5.4.  OPRF(P-384, SHA-512)
+6.4.  OPRF(P-384, SHA-512)
 
    *  Group: P-384 (secp384r1) [x9.62]
 
@@ -1154,7 +1700,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    *  ID: 0x0004
 
-5.5.  OPRF(P-521, SHA-512)
+6.5.  OPRF(P-521, SHA-512)
 
    *  Group: P-521 (secp521r1) [x9.62]
 
@@ -1176,7 +1722,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    *  ID: 0x0005
 
-6.  API Considerations
+7.  API Considerations
 
    Some VOPRF APIs specified in this document are fallible.  For
    example, "Finalize" and "Evaluate" can fail if any element received
@@ -1194,13 +1740,13 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    might emit.  For example, implementations might run out of memory and
    return a corresponding error.
 
-7.  Security Considerations
+8.  Security Considerations
 
    This section discusses the cryptographic security of our protocol,
    along with some suggestions and trade-offs that arise from the
    implementation of an OPRF.
 
-7.1.  Security Properties
+8.1.  Security Properties
 
    The security properties of an OPRF protocol with functionality y =
    F(k, x) include those of a standard PRF.  Specifically:
@@ -1248,13 +1794,13 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    In the following, we may also refer to this commitment as a public
    key.
 
-7.2.  Cryptographic Security
+8.2.  Cryptographic Security
 
    Below, we discuss the cryptographic security of the (V)OPRF protocol
    from Section 3, relative to the necessary cryptographic assumptions
    that need to be made.
 
-7.2.1.  Computational Hardness Assumptions
+8.2.1.  Computational Hardness Assumptions
 
    Each assumption states that the problems specified below are
    computationally difficult to solve in relation to a particular choice
@@ -1263,11 +1809,11 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    Let GG = GG(sp) be a group with prime-order p, and let GF(p) be a
    finite field of order p.
 
-7.2.1.1.  Discrete-log (DL) Problem
+8.2.1.1.  Discrete-log (DL) Problem
 
    Given G, a generator of GG, and H = hG for some h in GF(p); output h.
 
-7.2.1.2.  Decisional Diffie-Hellman (DDH) Problem
+8.2.1.2.  Decisional Diffie-Hellman (DDH) Problem
 
    Sample uniformly at random d in {0,1}. Given (G, aG, bG, C), where
 
@@ -1280,7 +1826,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    Output d' == d.
 
-7.2.2.  Protocol Security
+8.2.2.  Protocol Security
 
    Our OPRF construction is based on the VOPRF construction known as
    2HashDH-NIZK given by [JKK14]; essentially without providing zero-
@@ -1312,10 +1858,10 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    The original paper [JKK14] gives a security proof that the 2HashDH-
    NIZK construction satisfies the security guarantees of a VOPRF
-   protocol Section 7.1 under the OMDH assumption in the universal
+   protocol Section 8.1 under the OMDH assumption in the universal
    composability (UC) security model.
 
-7.2.3.  Q-Strong-DH Oracle
+8.2.3.  Q-Strong-DH Oracle
 
    A side-effect of our OPRF design is that it allows instantiation of a
    oracle for constructing Q-strong-DH (Q-sDH) samples.  The Q-Strong-DH
@@ -1351,7 +1897,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    if they can distinguish the OPRF interaction from a protocol that
    computes the ideal functionality provided by the PRF.
 
-7.2.4.  Implications for Ciphersuite Choices
+8.2.4.  Implications for Ciphersuite Choices
 
    The OPRF instantiations that we recommend in this document are
    informed by the cryptanalytic discussion above.  In particular,
@@ -1367,7 +1913,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    lower than 128 bits, we recommend only implementing ciphersuites with
    IDs: 0x0002, 0x0004, and 0x0005.
 
-7.3.  Element and Scalar Validation
+8.3.  Element and Scalar Validation
 
    The DeserializeElement function recovers a group element from an
    arbitrary byte array.  This function validates that the element is a
@@ -1397,7 +1943,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    that the input, when treated as a little-endian integer, is a valud
    between 0 and "Order()".
 
-7.4.  Hashing to Group
+8.4.  Hashing to Group
 
    A critical requirement of implementing the prime-order group using
    elliptic curves is a method to instantiate the function
@@ -1407,14 +1953,14 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 
    In the security proof of the construction Hash is modeled as a random
    oracle.  This implies that any instantiation of "GG.HashToGroup" must
-   be pre-image and collision resistant.  In Section 5 we give
+   be pre-image and collision resistant.  In Section 6 we give
    instantiations of this functionality based on the functions described
    in [I-D.irtf-cfrg-hash-to-curve].  Consequently, any OPRF
    implementation must adhere to the implementation and security
    considerations discussed in [I-D.irtf-cfrg-hash-to-curve] when
    instantiating the function.
 
-7.5.  Blinding Considerations
+8.5.  Blinding Considerations
 
    This document makes use of two types of blinding variants:
    multiplicative and additive.  The advantage of additive blinding is
@@ -1452,7 +1998,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    blinding variant, as the public key is always available for verifying
    the proof.
 
-7.6.  Timing Leaks
+8.6.  Timing Leaks
 
    To ensure no information is leaked during protocol execution, all
    operations that use secret data MUST run in constant time.
@@ -1460,20 +2006,20 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    group operations and proof-specific operations ("GenerateProof()" and
    "VerifyProof()").
 
-7.7.  Key Rotation
+8.7.  Key Rotation
 
    Since the server's key is critical to security, the longer it is
    exposed by performing (V)OPRF operations on client inputs, the longer
    it is possible that the key can be compromised.  For example, if the
    key is kept in circulation for a long period of time, then it also
    allows the clients to make enough queries to launch more powerful
-   variants of the Q-sDH attacks from Section 7.2.3.
+   variants of the Q-sDH attacks from Section 8.2.3.
 
    To combat attacks of this nature, regular key rotation should be
    employed on the server-side.  A suitable key-cycle for a key used to
    compute (V)OPRF evaluations would be between one week and six months.
 
-7.7.1.  Parameter Commitments
+8.7.1.  Parameter Commitments
 
    For some applications, it may be desirable for the server to bind
    tokens to certain parameters, e.g., protocol versions, ciphersuites,
@@ -1482,7 +2028,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    client, the server can later verify that T was generated using the
    scalar associated with the corresponding parameters.
 
-8.  Acknowledgements
+9.  Acknowledgements
 
    This document resulted from the work of the Privacy Pass team
    [PrivacyPass].  The authors would also like to acknowledge helpful
@@ -1491,9 +2037,9 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    Tatiana Bradley, Sofia Celi, Frank Denis, and Bas Westerbaan also
    provided helpful input and contributions to the document.
 
-9.  References
+10.  References
 
-9.1.  Normative References
+10.1.  Normative References
 
    [BB04]     "Short Signatures Without Random Oracles",
               <http://ai.stanford.edu/~xb/eurocrypt04a/bbsigs.pdf>.
@@ -1508,6 +2054,9 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    [DGSTV18]  "Privacy Pass, Bypassing Internet Challenges Anonymously",
               <https://www.degruyter.com/view/j/popets.2018.2018.issue-
               3/popets-2018-0026/popets-2018-0026.xml>.
+
+   [ECS15]    "The pythia PRF service",
+              <https://eprint.iacr.org/2015/644.pdf>.
 
    [I-D.davidson-pp-protocol]
               Davidson, A., "Privacy Pass: The Protocol", Work in
@@ -1578,11 +2127,14 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
    [SJKS17]   "SPHINX, A Password Store that Perfectly Hides from
               Itself", <https://eprint.iacr.org/2018/695>.
 
+   [TCRSTW21] "A Fast and Simple Partially Oblivious PRF, with
+              Applications", <https://eprint.iacr.org/2021/864>.
+
    [x9.62]    ANSI, "Public Key Cryptography for the Financial Services
               Industry: the Elliptic Curve Digital Signature Algorithm
               (ECDSA)", ANSI X9.62-1998, September 1998.
 
-9.2.  Informative References
+10.2.  Informative References
 
    [JKX21]    Jarecki, S., Krawczyk, H., and J. Xu, "On the (In)Security
               of the Diffie-Hellman Oblivious PRF with Multiplicative
@@ -1604,7 +2156,7 @@ def Finalize(input, blindedPublicKey, evaluatedElement, blindedElement, pkS, pro
 Appendix A.  Test Vectors
 
    This section includes test vectors for the (V)OPRF protocol specified
-   in this document.  For each ciphersuite specified in Section 5, there
+   in this document.  For each ciphersuite specified in Section 6, there
    is a set of test vectors for the protocol when run in the base mode
    and verifiable mode.  Each test vector lists the batch size for the
    evaluation.  Each test vector value is encoded as a hexadecimal byte
